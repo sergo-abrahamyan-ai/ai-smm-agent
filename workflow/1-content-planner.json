@@ -1,0 +1,512 @@
+{
+  "name": "SMM 1 - AI Content Planner (posts + images)",
+  "nodes": [
+    {
+      "id": "8ced76dd-e829-4504-9831-3817dcafebff",
+      "name": "Content Brief",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        112
+      ],
+      "parameters": {
+        "authentication": "n8nUserAuth",
+        "formTitle": "SMM-агент — контент-план с картинками",
+        "formDescription": "Опишите бизнес — AI подготовит посты с текстами, хэштегами и картинками. Посты попадут в Airtable как черновики: опубликуются в Instagram только после вашего одобрения (Status = approved).",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Бизнес",
+              "fieldName": "brand",
+              "fieldType": "textarea",
+              "defaultValue": "SYNCRONIX AI — AI-автоматизация для бизнеса в Ереване: чат-боты для сайта, WhatsApp и Instagram, автоматическая обработка заявок и документов.",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Аудитория",
+              "fieldName": "audience",
+              "fieldType": "text",
+              "defaultValue": "владельцы малого бизнеса в Ереване: клиники, салоны красоты, магазины, агентства недвижимости",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Цель постов",
+              "fieldName": "goal",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Получить заявки"
+                  },
+                  {
+                    "option": "Показать экспертность"
+                  },
+                  {
+                    "option": "Узнаваемость бренда"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Язык постов",
+              "fieldName": "language",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Русский"
+                  },
+                  {
+                    "option": "Հայերեն"
+                  },
+                  {
+                    "option": "English"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Сколько постов (1–7)",
+              "fieldName": "count",
+              "fieldType": "number",
+              "defaultValue": "3",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Дата первого поста",
+              "fieldName": "start_date",
+              "fieldType": "date",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Пожелания (необязательно)",
+              "fieldName": "notes",
+              "fieldType": "textarea",
+              "placeholder": "Например: один пост — кейс WhatsApp-бота для клиники"
+            }
+          ]
+        },
+        "responseMode": "lastNode",
+        "options": {
+          "appendAttribution": false,
+          "buttonLabel": "Создать контент-план",
+          "path": "smm-content-plan"
+        }
+      }
+    },
+    {
+      "id": "39da77bf-6a7b-4bb5-aa89-1cb51b771152",
+      "name": "AI Content Plan",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        224,
+        112
+      ],
+      "parameters": {
+        "promptType": "define",
+        "hasOutputParser": true,
+        "text": "=Business: {{ $json.brand }}\nAudience: {{ $json.audience }}\nGoal: {{ $json.goal }}\nLanguage of captions: {{ $json.language }}\nNumber of posts: {{ Math.min(7, Math.max(1, Number($json.count) || 3)) }}\nFirst post date: {{ $json.start_date }}\nWishes: {{ $json.notes || '-' }}",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "SystemMessagePromptTemplate",
+              "message": "You are a senior SMM strategist for Instagram. Create a content plan.\nRules:\n- Exactly the requested number of posts, each on a different topic (mix: pain/problem, case/example, tip, behind the scenes, offer).\n- topic: a short human title of the post in the caption language, without category labels like \"Pain:\" or \"Case:\".\n- publish_date: YYYY-MM-DD, first post on the first date, then every 2 days.\n- caption: in the requested language, 400-900 characters. First line is a strong hook. Short paragraphs, 1-3 emojis, a clear call to action at the end (write in Direct / link in bio). No fake numbers, no fake client names, no promises of guaranteed results. Do not put hashtags inside the caption.\n- hashtags: 5-8 relevant hashtags in one line, mix of local (Yerevan/Armenia) and niche.\n- image_prompt: in English, describe one clean visual for the post. Style for all posts: modern minimal 3D, dark navy background with electric blue accents, soft light. NEVER ask for any text, letters, logos or numbers in the image."
+            }
+          ]
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "9ed78b75-c086-4ae3-b4fd-4ce85b6e7558",
+      "name": "OpenAI Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        240,
+        336
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "options": {
+          "maxTokens": 8000,
+          "reasoningEffort": "low"
+        }
+      }
+    },
+    {
+      "id": "b413d6c2-1ca5-4b20-b20f-257dea073d73",
+      "name": "Plan Format",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        368,
+        336
+      ],
+      "parameters": {
+        "schemaType": "fromJson",
+        "jsonSchemaExample": "{\"posts\":[{\"topic\":\"Почему клиники теряют пациентов вечером\",\"publish_date\":\"2026-11-20\",\"caption\":\"Первая строка-крючок...\\n\\nОсновной текст...\\n\\nПризыв к действию.\",\"hashtags\":\"#ереван #бизнесереван #чатбот\",\"image_prompt\":\"Minimal 3D illustration of a smartphone with a glowing chat bubble at night in a dental clinic reception, dark navy background, electric blue accents\"}]}"
+      }
+    },
+    {
+      "id": "5555cd47-6ae9-4887-b547-81cd6368e8b4",
+      "name": "Split Posts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        112
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const posts = ($input.first().json.output?.posts || []).slice(0, 7);\nif (!posts.length) throw new Error('AI не вернул посты — попробуйте ещё раз');\nconst brief = $('Content Brief').first().json;\nconst tomorrow = $now.setZone('Asia/Yerevan').plus({ days: 1 }).startOf('day');\nlet start = DateTime.fromISO(String(brief.start_date || ''), { zone: 'Asia/Yerevan' });\nif (!start.isValid || start < tomorrow) start = tomorrow; // never schedule in the past\nconst stamp = Date.now();\nreturn posts.map((p, i) => {\n  const tags = String(p.hashtags || '').split(/\\s+/).filter(t => t.startsWith('#')).slice(0, 25).join(' ');\n  const caption = (String(p.caption || '').trim() + (tags ? '\\n\\n' + tags : '')).slice(0, 2150);\n  return { json: {\n    topic: String(p.topic || 'Пост ' + (i + 1)).slice(0, 200),\n    publishDate: start.plus({ days: 2 * i }).toFormat('yyyy-MM-dd'),\n    caption,\n    imagePrompt: String(p.image_prompt || 'Modern minimal 3D illustration of AI automation for small business, dark navy background, electric blue accents').slice(0, 1500),\n    fileName: 'smm_' + stamp + '_' + (i + 1) + '.jpg'\n  } };\n});"
+      },
+      "notes": "Why Code: caps the plan at 7 posts, cleans captions to Instagram limits and gives every image a unique file name."
+    },
+    {
+      "id": "c811f2d5-f590-444a-b51d-46b2e99b8935",
+      "name": "Generate Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        112
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/images/generations",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-image-1-mini', prompt: $json.imagePrompt + ' Square Instagram post visual. Absolutely no text, letters, words, numbers or logos anywhere in the image.', size: '1024x1024', quality: 'medium', output_format: 'jpeg', output_compression: 85, n: 1 }) }}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "7c621fc5-f960-42c3-909a-d34e16257ac0",
+      "name": "Image to File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        112
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const post = $('Split Posts').item.json;\nconst b64 = $json.data?.[0]?.b64_json;\nif (!b64) return { json: { ...post, imageOk: false, imageError: JSON.stringify($json.error || $json).slice(0, 300) } };\nreturn {\n  json: { ...post, imageOk: true },\n  binary: { image: { data: b64, mimeType: 'image/jpeg', fileName: post.fileName, fileExtension: 'jpg' } }\n};"
+      },
+      "notes": "Why Code: OpenAI returns the image as base64 JSON; this turns it into a JPEG binary for upload and keeps the post fields."
+    },
+    {
+      "id": "e3b065bf-71c6-4f43-be37-08ae4a405aa9",
+      "name": "Upload to Storage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1248,
+        112
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://YOUR_SUPABASE_PROJECT_REF.supabase.co/storage/v1/object/smm-images/{{ $json.fileName }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-upsert",
+              "value": "true"
+            },
+            {
+              "name": "Content-Type",
+              "value": "image/jpeg"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "image",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "0c097345-4960-45dc-990f-7c7e99af6b74",
+      "name": "Save Draft",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1472,
+        112
+      ],
+      "parameters": {
+        "resource": "record",
+        "operation": "create",
+        "authentication": "airtableTokenApi",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_CONTENT_PLAN_TABLE_ID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Topic": "={{ $('Image to File').item.json.topic }}",
+            "Publish Date": "={{ $('Image to File').item.json.publishDate }}",
+            "Format": "photo",
+            "Caption": "={{ $('Image to File').item.json.caption }}",
+            "Image Idea": "={{ $('Image to File').item.json.imagePrompt }}",
+            "Image URL": "={{ $('Image to File').item.json.imageOk && $json.Key ? 'https://YOUR_SUPABASE_PROJECT_REF.supabase.co/storage/v1/object/public/smm-images/' + $('Image to File').item.json.fileName : '' }}",
+            "Status": "draft"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Topic",
+              "displayName": "Topic",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publish Date",
+              "displayName": "Publish Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Format",
+              "displayName": "Format",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Caption",
+              "displayName": "Caption",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image Idea",
+              "displayName": "Image Idea",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image URL",
+              "displayName": "Image URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {
+          "typecast": true
+        }
+      }
+    },
+    {
+      "id": "538222e0-88f7-4eb5-b6a9-2661ed561f2b",
+      "name": "Notify Ready",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1696,
+        112
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "=📝 Контент-план готов: {{ $input.all().length }} пост(а) в Airtable «Content Plan» (статус draft).\n{{ $input.all().filter(i => !i.json.fields?.['Image URL']).length ? '⚠️ У части постов нет картинки — проверьте.' : '🖼 Картинки сгенерированы для всех постов.' }}\nПроверьте тексты и поставьте Status = approved — пост сам выйдет в Instagram в дату публикации.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "a12a8a4d-fab6-427d-aca8-075071fb7d98",
+      "name": "Done",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.5,
+      "position": [
+        1920,
+        112
+      ],
+      "parameters": {
+        "operation": "completion",
+        "respondWith": "text",
+        "completionTitle": "✅ Контент-план готов",
+        "completionMessage": "=Создано постов: {{ $('Save Draft').all().length }}. Они в Airtable «Content Plan» со статусом draft. Проверьте и поставьте approved — публикация в Instagram пройдёт автоматически в дату поста."
+      },
+      "executeOnce": true
+    }
+  ],
+  "connections": {
+    "Content Brief": {
+      "main": [
+        [
+          {
+            "node": "AI Content Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Content Plan": {
+      "main": [
+        [
+          {
+            "node": "Split Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Content Plan",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan Format": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Content Plan",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Posts": {
+      "main": [
+        [
+          {
+            "node": "Generate Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Image": {
+      "main": [
+        [
+          {
+            "node": "Image to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Image to File": {
+      "main": [
+        [
+          {
+            "node": "Upload to Storage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to Storage": {
+      "main": [
+        [
+          {
+            "node": "Save Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Draft": {
+      "main": [
+        [
+          {
+            "node": "Notify Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Ready": {
+      "main": [
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

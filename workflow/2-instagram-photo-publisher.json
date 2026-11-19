@@ -1,0 +1,482 @@
+{
+  "name": "SMM 2 - Instagram Auto Publisher",
+  "nodes": [
+    {
+      "id": "06e06c4c-b6e3-49d7-b7ff-3adac3120042",
+      "name": "Every Hour 10-20",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10-20 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "d511496a-8869-40d7-8343-3498983dd3e8",
+      "name": "Find Approved Posts",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "authentication": "airtableTokenApi",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_CONTENT_PLAN_TABLE_ID"
+        },
+        "filterByFormula": "AND({Status}='approved', {Format}!='reel', {Image URL}!='', IS_BEFORE({Publish Date}, DATEADD(TODAY(), 1, 'days')))",
+        "returnAll": false,
+        "limit": 3,
+        "options": {}
+      }
+    },
+    {
+      "id": "05231f8f-b264-4ca4-9973-2e42e2e46538",
+      "name": "Create IG Container",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v26.0/me/media",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ image_url: $('Find Approved Posts').item.json.fields['Image URL'], caption: String($('Find Approved Posts').item.json.fields.Caption || '').slice(0, 2150) }) }}",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "4b8ec5ce-fb7d-473d-9aff-3233179a4c9c",
+      "name": "Wait for Instagram",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 20,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "f2da013c-f2b4-4d44-8365-d491ee013b8a",
+      "name": "Publish to Instagram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v26.0/me/media_publish",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ creation_id: $('Create IG Container').item.json.id || 'missing' }) }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput",
+      "disabled": false
+    },
+    {
+      "id": "daf52a17-8f59-44a0-9628-e7bb9b13e606",
+      "name": "Mark Result",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "resource": "record",
+        "operation": "update",
+        "authentication": "airtableTokenApi",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_CONTENT_PLAN_TABLE_ID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $('Find Approved Posts').item.json.id }}",
+            "Status": "={{ $json.id ? 'published' : 'failed' }}",
+            "Post ID": "={{ $json.id || ('ERROR: ' + JSON.stringify($json.error?.message || $('Create IG Container').item.json.error?.message || 'unknown')).slice(0, 200) }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Post ID",
+              "displayName": "Post ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "disabled": false
+    },
+    {
+      "id": "d9964cf8-75c5-424e-9b4b-033518294e09",
+      "name": "Report",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1344,
+        0
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.fields?.Status === 'published' ? '✅ Опубликовано в Instagram' : '⚠️ Не удалось опубликовать' }}: {{ $('Find Approved Posts').item.json.fields.Topic }}{{ $json.fields?.Status === 'published' ? '' : '\\nПричина: ' + ($json.fields?.['Post ID'] || '?') + '\\nПост помечен failed — исправьте и снова поставьте approved.' }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "onError": "continueRegularOutput",
+      "disabled": false
+    },
+    {
+      "id": "bab240c4-c092-48ca-98c4-3f7adc04636e",
+      "name": "Lock Post",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        330,
+        0
+      ],
+      "parameters": {
+        "resource": "record",
+        "operation": "update",
+        "authentication": "airtableTokenApi",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_CONTENT_PLAN_TABLE_ID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}",
+            "Status": "publishing"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {
+          "typecast": true
+        }
+      }
+    },
+    {
+      "id": "ff30489a-ede3-42e2-9726-266f4dbee051",
+      "name": "Find Broken Approved",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        224,
+        220
+      ],
+      "parameters": {
+        "resource": "record",
+        "operation": "search",
+        "authentication": "airtableTokenApi",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_CONTENT_PLAN_TABLE_ID"
+        },
+        "filterByFormula": "AND({Status}='approved', OR({Image URL}='', {Publish Date}=BLANK(), {Caption}=''))",
+        "returnAll": false,
+        "limit": 10,
+        "options": {}
+      }
+    },
+    {
+      "id": "c9bc392d-d328-4d12-b534-76e5ebb93c1a",
+      "name": "Mark Needs Fix",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        220
+      ],
+      "parameters": {
+        "resource": "record",
+        "operation": "update",
+        "authentication": "airtableTokenApi",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_CONTENT_PLAN_TABLE_ID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}",
+            "Status": "needs fix"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {
+          "typecast": true
+        }
+      }
+    },
+    {
+      "id": "9ea5be42-1dbe-4f52-8ea0-a19350962eb2",
+      "name": "Warn Needs Fix",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        672,
+        220
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "=⚠️ Пост одобрен, но его нельзя опубликовать: {{ $('Find Broken Approved').item.json.fields.Topic || 'без темы' }}\nНе хватает: {{ [ !$('Find Broken Approved').item.json.fields['Image URL'] ? 'картинки (Image URL)' : '', !$('Find Broken Approved').item.json.fields['Publish Date'] ? 'даты' : '', !$('Find Broken Approved').item.json.fields.Caption ? 'текста' : '' ].filter(Boolean).join(', ') }}\nСтатус сменён на «needs fix». Исправьте в Airtable и снова поставьте approved.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Hour 10-20": {
+      "main": [
+        [
+          {
+            "node": "Find Approved Posts",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Find Broken Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create IG Container": {
+      "main": [
+        [
+          {
+            "node": "Wait for Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Instagram": {
+      "main": [
+        [
+          {
+            "node": "Publish to Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish to Instagram": {
+      "main": [
+        [
+          {
+            "node": "Mark Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Result": {
+      "main": [
+        [
+          {
+            "node": "Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Approved Posts": {
+      "main": [
+        [
+          {
+            "node": "Lock Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lock Post": {
+      "main": [
+        [
+          {
+            "node": "Create IG Container",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Broken Approved": {
+      "main": [
+        [
+          {
+            "node": "Mark Needs Fix",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Needs Fix": {
+      "main": [
+        [
+          {
+            "node": "Warn Needs Fix",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
