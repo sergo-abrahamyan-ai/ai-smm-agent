@@ -101,7 +101,18 @@ samples/
 
 - 🎬 Demo video: [watch](https://czibuahmksmifbzapnkv.supabase.co/storage/v1/object/public/smm-images/videos/5-smm-agent-hy.mp4)
 - Generated images: [`samples/post1.jpg`](samples/post1.jpg), [`samples/post2.jpg`](samples/post2.jpg)
-- n8n canvas screenshot: *coming soon*
+
+**Content planner**
+
+![Content planner](docs/1-content-planner.png)
+
+**Instagram photo publisher**
+
+![Instagram photo publisher](docs/2-instagram-photo-publisher.png)
+
+**Daily Reels publisher**
+
+![Daily Reels publisher](docs/3-daily-reels-publisher.png)
 
 ## What I learned
 
